@@ -127,9 +127,10 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request, userId string) {
 	}
 	client := &Client{hub: hub, conn: conn, send: make(chan Message, 256)}
 	client.hub.register <- client
-	clientMap := make(map[*Client]bool)
-	clientMap[client] = true
-	hub.users[userId] = clientMap
+	hub.users[userId] = client
+	auth.Users = append(auth.Users, User{
+		Id: userId,
+	})
 
 	// Allow collection of memory referenced by the caller by doing all work in
 	// new goroutines.

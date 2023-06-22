@@ -20,12 +20,24 @@ var auth = &Auth{
 
 var db *Db
 
+func setupCorsResponse(w *http.ResponseWriter) {
+	(*w).Header().Set("Access-Control-Allow-Origin", "*")
+	(*w).Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+	(*w).Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Authorization")
+}
+
 func main() {
 	flag.Parse()
 	go hub.run()
 	db = initDb()
 	InitRandom()
 	http.HandleFunc("/addUser", func(w http.ResponseWriter, r *http.Request) {
+		setupCorsResponse(&w)
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			w.Header().Set("Content-Type", "application/json")
+			return
+		}
 		if r.Method != "POST" {
 			http.Error(w, "Request not allowed", 405)
 		}
@@ -51,6 +63,13 @@ func main() {
 	})
 
 	http.HandleFunc("/getToken", func(w http.ResponseWriter, r *http.Request) {
+		setupCorsResponse(&w)
+
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			w.Header().Set("Content-Type", "application/json")
+			return
+		}
 		if r.Method != "POST" {
 			http.Error(w, "Request not allowed", 405)
 		}
@@ -86,6 +105,7 @@ func main() {
 		json.NewEncoder(w).Encode(mp)
 	})
 	http.HandleFunc("/ws/", func(w http.ResponseWriter, r *http.Request) {
+		setupCorsResponse(&w)
 		token := strings.TrimPrefix(r.URL.Path, "/ws/")
 		if auth.userExists(token) {
 			http.Error(w, "User already connected", 400)

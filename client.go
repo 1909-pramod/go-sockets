@@ -66,11 +66,12 @@ func (c *Client) readPump(usrId string) {
 		}
 		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
 		splitData := bytes.Split(message, []byte(":"))
-		data, roomId, userId := splitData[0], splitData[1], splitData[2]
+		data, roomId, userId, messageType := splitData[0], splitData[1], splitData[2], splitData[3]
 		c.hub.broadcast <- Message{
-			data:   data,
-			roomId: roomId,
-			userId: userId,
+			data:        data,
+			roomId:      roomId,
+			userId:      userId,
+			messageType: messageType,
 		}
 	}
 }
@@ -96,7 +97,7 @@ func (c *Client) writePump() {
 				return
 			}
 
-			toSend := bytes.Join([][]byte{message.data, message.roomId, message.userId}, []byte(":"))
+			toSend := bytes.Join([][]byte{message.data, message.roomId, message.userId, message.messageType}, []byte(":"))
 
 			w.Write(toSend)
 
@@ -128,7 +129,12 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request, userId string) {
 		log.Println("error connecting to socket for user with id %s\t %v", userId, err)
 		return
 	}
-	client := &Client{hub: hub, conn: conn, send: make(chan Message, 256)}
+	client := &Client{
+		hub:    hub,
+		conn:   conn,
+		send:   make(chan Message, 256),
+		userId: userId,
+	}
 	client.hub.register <- client
 	hub.users[userId] = client
 	auth.Users = append(auth.Users, User{

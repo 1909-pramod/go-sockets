@@ -1,8 +1,17 @@
 package main
 
+import "log"
+
 type UserRequests struct {
 	UserConnections    map[string][]*User
 	ConnectionRequests map[string][]*User
+}
+
+func InitUserRequests() *UserRequests {
+	return &UserRequests{
+		UserConnections:    make(map[string][]*User),
+		ConnectionRequests: make(map[string][]*User),
+	}
 }
 
 func FindUser(users []*User, userId string) (int, *User) {
@@ -14,19 +23,63 @@ func FindUser(users []*User, userId string) (int, *User) {
 	return -1, nil
 }
 
+func RemoveFromUserSlice(users []*User, Id string) []*User {
+	ind, _ := FindUser(users, Id)
+	if ind != -1 {
+		return append(users[:ind], users[ind+1:]...)
+	}
+	return users
+}
+
 func (requests *UserRequests) CheckConnectionExists(Id1 string, Id2 string) bool {
-	_, exists1 := requests.UserConnections[Id1]
-	_, exists2 := requests.UserConnections[Id2]
+	log.Printf("check connections %v %v", Id1, Id2)
+	users1, exists1 := requests.UserConnections[Id1]
+	users2, exists2 := requests.UserConnections[Id2]
+	log.Printf("Checking connection %v, %v", exists1, exists2)
 	if exists1 && exists2 {
 		return true
 	}
 	if exists1 {
-		delete(requests.UserConnections, Id1)
+		requests.UserConnections[Id1] = RemoveFromUserSlice(users1, Id2)
 	}
 	if exists2 {
-		delete(requests.UserConnections, Id2)
+		requests.UserConnections[Id2] = RemoveFromUserSlice(users2, Id1)
 	}
 	return false
+}
+
+func (requests *UserRequests) CreateConnections(fromId string, toId string) {
+	log.Printf("%v %v", fromId, toId)
+	users, exists := requests.ConnectionRequests[toId]
+	if exists {
+		requests.ConnectionRequests[toId] = RemoveFromUserSlice(users, fromId)
+	}
+	from, fromExists := requests.UserConnections[fromId]
+	if fromExists {
+		requests.UserConnections[fromId] = RemoveFromUserSlice(from, toId)
+		requests.UserConnections[fromId] = append(requests.UserConnections[fromId], &User{
+			Id: toId,
+		})
+	} else {
+		fromUser := &User{
+			Id: toId,
+		}
+		requests.UserConnections[fromId] = []*User{fromUser}
+	}
+	log.Printf("from user %V \n", requests.UserConnections[fromId])
+	to, toExists := requests.UserConnections[toId]
+	if toExists {
+		requests.UserConnections[toId] = RemoveFromUserSlice(to, fromId)
+		requests.UserConnections[toId] = append(requests.UserConnections[toId], &User{
+			Id: fromId,
+		})
+	} else {
+		toUser := &User{
+			Id: fromId,
+		}
+		requests.UserConnections[toId] = []*User{toUser}
+	}
+	log.Printf("to user %V \n", requests.UserConnections[toId])
 }
 
 func (requests *UserRequests) GetConnectionRequests(Id string) []*User {

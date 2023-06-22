@@ -8,6 +8,16 @@ import (
 	"strings"
 )
 
+type ConnectionRequest struct {
+	Token  string `json:token`
+	UserId string `json:userId`
+}
+
+type AcceptConnectionBody struct {
+	UserToken       string `json:userToken`
+	ConnectionToken string `json:connectionToken`
+}
+
 var addr = flag.String("addr", ":8080", "http service address")
 
 var Rooms = make(map[string]map[string]bool)
@@ -19,6 +29,7 @@ var auth = &Auth{
 }
 
 var db *Db
+var connectionRequest *UserRequests
 
 func setupCorsResponse(w *http.ResponseWriter) {
 	(*w).Header().Set("Access-Control-Allow-Origin", "*")
@@ -30,7 +41,103 @@ func main() {
 	flag.Parse()
 	go hub.run()
 	db = initDb()
+	connectionRequest = InitUserRequests()
 	InitRandom()
+
+	http.HandleFunc("/addRequest", func(w http.ResponseWriter, r *http.Request) {
+		setupCorsResponse(&w)
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			w.Header().Set("Content-Type", "application/json")
+			return
+		}
+		if r.Method != "POST" {
+			http.Error(w, "Request not allowed", 405)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		decoder := json.NewDecoder(r.Body)
+		var connectData ConnectionRequest
+		err := decoder.Decode(&connectData)
+		if err != nil {
+			http.Error(w, "Invalid details", 400)
+		}
+		user, err := auth.getUserWithToken(connectData.Token)
+		if err != nil {
+			http.Error(w, "Invalid Token", 400)
+			return
+		}
+		if !auth.userExists(user.Id) {
+			http.Error(w, "Please login to access this", 400)
+			return
+		}
+		exists := connectionRequest.CheckConnectionExists(user.Id, connectData.UserId)
+		if exists {
+			http.Error(w, "Already connected", 400)
+			return
+		}
+		connectionRequest.AddRequests(user.Id, connectData.UserId)
+		hubUser, userConnected := hub.users[connectData.UserId]
+		if !userConnected {
+			http.Error(w, "User not connected", 400)
+			return
+		}
+		hubUser.send <- Message{
+			data:        []byte(connectData.Token),
+			roomId:      []byte("-"),
+			userId:      []byte(connectData.UserId),
+			messageType: []byte("CONNECTION_REQUEST"),
+		}
+		resp := make(map[string]string)
+		resp["message"] = "Requested"
+		json.NewEncoder(w).Encode(resp)
+	})
+
+	http.HandleFunc("/acceptRequest", func(w http.ResponseWriter, r *http.Request) {
+		setupCorsResponse(&w)
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			w.Header().Set("Content-Type", "application/json")
+			return
+		}
+		if r.Method != "POST" {
+			http.Error(w, "Request not allowed", 405)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		decoder := json.NewDecoder(r.Body)
+		var connectionData AcceptConnectionBody
+		err := decoder.Decode(&connectionData)
+		if err != nil {
+			http.Error(w, "Invalid details", 400)
+		}
+		user, err := auth.getUserWithToken(connectionData.UserToken)
+		if err != nil {
+			http.Error(w, "Invalid Token", 400)
+			return
+		}
+		if !auth.userExists(user.Id) {
+			http.Error(w, "Please login to access this", 400)
+			return
+		}
+		log.Printf("connection data %v\n", connectionData)
+		connUser, connErr := auth.getUserWithToken(connectionData.ConnectionToken)
+		if connErr != nil {
+			http.Error(w, "Invalid Token", 400)
+			return
+		}
+		if !auth.userExists(connUser.Id) {
+			http.Error(w, "User disconnected", 400)
+			return
+		}
+		if !connectionRequest.CheckConnectionExists(user.Id, connUser.Id) {
+			connectionRequest.CreateConnections(user.Id, connUser.Id)
+		}
+		log.Printf("connection created %V", connectionRequest.UserConnections)
+		resp := make(map[string]string)
+		resp["message"] = "Requested"
+		json.NewEncoder(w).Encode(resp)
+	})
+
 	http.HandleFunc("/addUser", func(w http.ResponseWriter, r *http.Request) {
 		setupCorsResponse(&w)
 		if r.Method == "OPTIONS" {

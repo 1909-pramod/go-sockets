@@ -2,12 +2,14 @@ package main
 
 import (
 	"bytes"
+	"log"
 )
 
 type Message struct {
-	roomId []byte
-	userId []byte
-	data   []byte
+	roomId      []byte
+	userId      []byte
+	data        []byte
+	messageType []byte
 }
 
 type Hub struct {
@@ -74,7 +76,10 @@ func (h *Hub) run() {
 			if bytes.Compare(message.userId, []byte("-")) != 0 {
 				client, exists := h.users[string(message.userId)]
 				if exists {
-					client.send <- message
+					log.Printf("checking client %v", client.userId)
+					if connectionRequest.CheckConnectionExists(client.userId, string(message.userId)) {
+						client.send <- message
+					}
 				}
 			}
 		}

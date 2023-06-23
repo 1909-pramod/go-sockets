@@ -143,7 +143,7 @@ func main() {
 			userId:      []byte(connUser.Id),
 			messageType: []byte("CONNECTION_REQUEST_ACCEPTED"),
 		}
-		hubUser1, userConnected1 := hub.users[user.Id]
+		hubUser1, userConnected1 := hub.users[connUser.Id]
 		if !userConnected1 {
 			http.Error(w, "User not connected", 400)
 			return

@@ -132,6 +132,28 @@ func main() {
 		if !connectionRequest.CheckConnectionExists(user.Id, connUser.Id) {
 			connectionRequest.CreateConnections(user.Id, connUser.Id)
 		}
+		hubUser, userConnected := hub.users[user.Id]
+		if !userConnected {
+			http.Error(w, "User not connected", 400)
+			return
+		}
+		hubUser.send <- Message{
+			data:        []byte(connectionData.ConnectionToken),
+			roomId:      []byte("-"),
+			userId:      []byte(connUser.Id),
+			messageType: []byte("CONNECTION_REQUEST_ACCEPTED"),
+		}
+		hubUser1, userConnected1 := hub.users[user.Id]
+		if !userConnected1 {
+			http.Error(w, "User not connected", 400)
+			return
+		}
+		hubUser1.send <- Message{
+			data:        []byte(connectionData.UserToken),
+			roomId:      []byte("-"),
+			userId:      []byte(user.Id),
+			messageType: []byte("CONNECTION_REQUEST_ACCEPTED"),
+		}
 		log.Printf("connection created %V", connectionRequest.UserConnections)
 		resp := make(map[string]string)
 		resp["message"] = "Requested"
